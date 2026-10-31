@@ -58,22 +58,25 @@ dialog .in{padding:14px 16px 18px}dialog h2{margin:0 0 4px}
 <div id="grid"></div>
 <dialog id="m"><button id="x">✕</button><div id="mb"></div></dialog>
 <script>
-const SB_URL='https://ucyhbyyooybzpfbkbjnm.supabase.co', SB_KEY='sb_publishable_Rapby3tBs6q9VHF2wjrypg_nYHYDTcQ';
+const SB_URL='https://ucyhbyyooybzpfbkbjnm.supabase.co', SB_KEY='INCOLLA_QUI_LA_CHIAVE';
 const $=s=>document.querySelector(s);
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const DIFF={Facile:1,Medio:2,Difficile:3};
-let G=[],X=[];
+let DIFF={},DMIN=1,DMAX=1,G=[],X=[];
 const F={q:'',p:'',t:'',d:new Set(),ty:new Set(),c:new Set(),o:false};
 const img=n=>`${SB_URL}/storage/v1/object/public/covers/${encodeURIComponent(n||'')}`;
 const rng=(a,b,u='')=>a===b?a+u:a+'–'+b+u;
 
 function prep(){
+  DIFF={};
   for(const g of G){
-    g._c=(g.categories||'').split(',').map(s=>s.trim()).filter(Boolean);
+    g.type=g.t?.name;g.difficulty=g.d?.name;DIFF[g.difficulty]=g.d?.sort_order??0;
+    g._c=(g.gc||[]).map(x=>x.c.name);
     g._x=X.filter(x=>x.base_game_id===g.id);
     g._mp=g.max_players+Math.max(0,...g._x.map(x=>x.additional_players||0));
   }
+  const v=Object.values(DIFF);DMIN=Math.min(...v);DMAX=Math.max(...v);
 }
+const dot=g=>{const f=DMAX>DMIN?(DIFF[g.difficulty]-DMIN)/(DMAX-DMIN):0;return `<span class="dot" style="background:hsl(${Math.round(140-140*f)} 60% 50%)"></span>`};
 function chips(id,vals,set){
   const box=$(id);
   box.innerHTML=vals.map(v=>`<button data-v="${e(v)}" class="${set.has(v)?'on':''}">${e(v)}</button>`).join('');
@@ -101,7 +104,7 @@ function render(){
   $('#n').textContent=L.length+' giochi';
   $('#grid').innerHTML=L.map(g=>`<div class="card" data-id="${g.id}"><img loading="lazy" src="${img(g.image_name)}" alt="">
     <div class="t"><b>${e(g.name)}</b><small>👥 ${rng(g.min_players,g._mp)} · ⏱ ${rng(g.min_duration,g.max_duration,'′')}</small><br>
-    <small><span class="dot d${DIFF[g.difficulty]||1}"></span>${e(g.difficulty)}</small></div></div>`).join('')||'<p class="meta">Nessun gioco trovato.</p>';
+    <small>${dot(g)}${e(g.difficulty)}</small></div></div>`).join('')||'<p class="meta">Nessun gioco trovato.</p>';
 }
 $('#grid').onclick=ev=>{
   const c=ev.target.closest('.card');if(!c)return;
@@ -124,13 +127,13 @@ $('#rs').onclick=()=>{F.q=F.p=F.t='';F.o=false;F.d.clear();F.ty.clear();F.c.clea
 try{if(localStorage.getItem('bgv')==='l')$('#vb').click()}catch{}
 
 async function load(){
-  try{const c=JSON.parse(localStorage.getItem('bg'));if(c){G=c.g;X=c.x;init()}}catch{}
+  try{const c=JSON.parse(localStorage.getItem('bg2'));if(c){G=c.g;X=c.x;init()}}catch{}
   try{
     const h={apikey:SB_KEY};
-    const [g,x]=await Promise.all(['games?select=*','expansions?select=*'].map(p=>
+    const [g,x]=await Promise.all(['games?select=*,t:types(name),d:difficulties(name,sort_order),gc:game_categories(c:categories(name))','expansions?select=*'].map(p=>
       fetch(`${SB_URL}/rest/v1/${p}`,{headers:h}).then(r=>{if(!r.ok)throw r.status;return r.json()})));
     G=g;X=x;init();
-    try{localStorage.setItem('bg',JSON.stringify({g,x}))}catch{}
+    try{localStorage.setItem('bg2',JSON.stringify({g,x}))}catch{}
   }catch(err){$('#st').textContent=G.length?'· offline, dati salvati':'· errore di caricamento ('+err+')'}
 }
 load();
