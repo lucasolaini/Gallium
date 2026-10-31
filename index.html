@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>I miei giochi</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Giochi">
+<meta name="theme-color" content="#0f1512">
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1c211e;--mu:#6b736e;--ac:#1f8a5b;--bd:#e2e0d8;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1512;--card:#19201c;--tx:#eceee9;--mu:#9aa39d;--ac:#3fbf8a;--bd:#2a332d;color-scheme:dark}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,system-ui,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 12px;border-bottom:1px solid var(--bd)}
+.row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+input[type=search],select,button{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px 10px}
+input[type=search]{width:100%}select{flex:1;min-width:0}
+details{margin-top:8px}summary{cursor:pointer;color:var(--mu)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chips button{padding:5px 11px;border-radius:99px}
+.chips button.on,#vb.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.meta{color:var(--mu);font-size:13px;padding:8px 12px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:0 12px 24px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;cursor:pointer}
+.card img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:var(--bd)}
+.card .t{padding:8px 10px 10px}.card b{display:block;font-size:14px;line-height:1.25}
+.card small{color:var(--mu)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
+.d1{background:#3fbf8a}.d2{background:#e0a526}.d3{background:#d6544a}
+#grid.list{grid-template-columns:1fr;gap:8px}
+#grid.list .card{display:flex}#grid.list img{width:84px;height:84px;flex:none}
+dialog{width:min(92vw,520px);max-height:88vh;border:0;border-radius:16px;background:var(--card);color:var(--tx);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+dialog img{width:100%;max-height:46vh;object-fit:cover;display:block}
+dialog .in{padding:14px 16px 18px}dialog h2{margin:0 0 4px}
+.tag{display:inline-block;border:1px solid var(--bd);border-radius:99px;padding:2px 9px;margin:6px 6px 0 0;font-size:13px;color:var(--mu)}
+#x{position:absolute;right:10px;top:10px;border-radius:99px;padding:4px 11px}
+</style>
+</head>
+<body>
+<header>
+  <input type="search" id="q" placeholder="Cerca un gioco…">
+  <div class="row">
+    <select id="p"><option value="">Giocatori</option></select>
+    <select id="t"><option value="">Durata</option></select>
+    <select id="s"><option value="name">Nome</option><option value="dur">Durata</option><option value="diff">Difficoltà</option><option value="pl">Più giocatori</option><option value="new">Ultimi aggiunti</option></select>
+    <button id="vb" title="Vista">▦</button>
+  </div>
+  <details><summary>Filtri</summary>
+    <div class="chips" id="cd"></div><div class="chips" id="ct"></div><div class="chips" id="cc"></div>
+    <div class="chips"><button id="co">One shot</button><button id="rs">Azzera</button></div>
+  </details>
+</header>
+<div class="meta"><span id="n"></span> <span id="st"></span></div>
+<div id="grid"></div>
+<dialog id="m"><button id="x">✕</button><div id="mb"></div></dialog>
+<script>
+const SB_URL='https://ucyhbyyooybzpfbkbjnm.supabase.co', SB_KEY='INCOLLA_QUI_LA_CHIAVE';
+const $=s=>document.querySelector(s);
+const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DIFF={Facile:1,Medio:2,Difficile:3};
+let G=[],X=[];
+const F={q:'',p:'',t:'',d:new Set(),ty:new Set(),c:new Set(),o:false};
+const img=n=>`${SB_URL}/storage/v1/object/public/covers/${encodeURIComponent(n||'')}`;
+const rng=(a,b,u='')=>a===b?a+u:a+'–'+b+u;
+
+function prep(){
+  for(const g of G){
+    g._c=(g.categories||'').split(',').map(s=>s.trim()).filter(Boolean);
+    g._x=X.filter(x=>x.base_game_id===g.id);
+    g._mp=g.max_players+Math.max(0,...g._x.map(x=>x.additional_players||0));
+  }
+}
+function chips(id,vals,set){
+  const box=$(id);
+  box.innerHTML=vals.map(v=>`<button data-v="${e(v)}" class="${set.has(v)?'on':''}">${e(v)}</button>`).join('');
+  box.onclick=ev=>{const v=ev.target.dataset.v;if(v==null)return;set.has(v)?set.delete(v):set.add(v);ev.target.classList.toggle('on');render()};
+}
+function init(){
+  prep();
+  const u=k=>[...new Set(G.flatMap(g=>k==='c'?g._c:[g[k]]).filter(Boolean))].sort((a,b)=>(DIFF[a]||0)-(DIFF[b]||0)||a.localeCompare(b,'it'));
+  chips('#cd',u('difficulty'),F.d);chips('#ct',u('type'),F.ty);chips('#cc',u('c'),F.c);
+  const mp=Math.max(...G.map(g=>g._mp),1);
+  if($('#p').options.length<2){
+    for(let i=1;i<=mp;i++)$('#p').add(new Option(i+(i===1?' giocatore':' giocatori'),i));
+    for(const t of [20,30,45,60,90,120])$('#t').add(new Option('fino a '+t+'′',t));
+  }
+  render();
+}
+function render(){
+  const q=F.q.toLowerCase(),p=+F.p,t=+F.t;
+  let L=G.filter(g=>(!q||g.name.toLowerCase().includes(q))&&(!p||(g.min_players<=p&&p<=g._mp))&&(!t||g.min_duration<=t)
+    &&(!F.d.size||F.d.has(g.difficulty))&&(!F.ty.size||F.ty.has(g.type))&&(!F.c.size||[...F.c].every(c=>g._c.includes(c)))&&(!F.o||g.one_shot));
+  const s=$('#s').value,N=(a,b)=>a.name.localeCompare(b.name,'it');
+  const S={name:N,dur:(a,b)=>a.min_duration-b.min_duration||N(a,b),diff:(a,b)=>DIFF[a.difficulty]-DIFF[b.difficulty]||N(a,b),
+    pl:(a,b)=>b._mp-a._mp||N(a,b),new:(a,b)=>(b.created_at||'').localeCompare(a.created_at||'')||N(a,b)};
+  L.sort(S[s]);
+  $('#n').textContent=L.length+' giochi';
+  $('#grid').innerHTML=L.map(g=>`<div class="card" data-id="${g.id}"><img loading="lazy" src="${img(g.image_name)}" alt="">
+    <div class="t"><b>${e(g.name)}</b><small>👥 ${rng(g.min_players,g._mp)} · ⏱ ${rng(g.min_duration,g.max_duration,'′')}</small><br>
+    <small><span class="dot d${DIFF[g.difficulty]||1}"></span>${e(g.difficulty)}</small></div></div>`).join('')||'<p class="meta">Nessun gioco trovato.</p>';
+}
+$('#grid').onclick=ev=>{
+  const c=ev.target.closest('.card');if(!c)return;
+  const g=G.find(x=>x.id==c.dataset.id);
+  $('#mb').innerHTML=`<img src="${img(g.image_name)}" alt=""><div class="in"><h2>${e(g.name)}</h2>
+    <div>${[g.type,g.difficulty,g.one_shot?'One shot':''].filter(Boolean).concat(g._c).map(x=>`<span class="tag">${e(x)}</span>`).join('')}</div>
+    <p>👥 ${rng(g.min_players,g.max_players)} giocatori · ⏱ ${rng(g.min_duration,g.max_duration,' min')}</p><p>${e(g.description)}</p>
+    ${g._x.length?'<b>Espansioni</b><ul>'+g._x.map(x=>`<li>${e(x.name)}${x.additional_players?` (+${x.additional_players} giocatori)`:''}</li>`).join('')+'</ul>':''}</div>`;
+  $('#m').showModal();
+};
+$('#x').onclick=()=>$('#m').close();
+$('#m').onclick=ev=>{if(ev.target.id==='m')$('#m').close()};
+$('#q').oninput=ev=>{F.q=ev.target.value;render()};
+$('#p').onchange=ev=>{F.p=ev.target.value;render()};
+$('#t').onchange=ev=>{F.t=ev.target.value;render()};
+$('#s').onchange=render;
+$('#co').onclick=ev=>{F.o=!F.o;ev.target.classList.toggle('on',F.o);render()};
+$('#vb').onclick=ev=>{const l=$('#grid').classList.toggle('list');ev.target.classList.toggle('on',l);ev.target.textContent=l?'☰':'▦';try{localStorage.setItem('bgv',l?'l':'g')}catch{}};
+$('#rs').onclick=()=>{F.q=F.p=F.t='';F.o=false;F.d.clear();F.ty.clear();F.c.clear();$('#q').value=$('#p').value=$('#t').value='';$('#co').classList.remove('on');init()};
+try{if(localStorage.getItem('bgv')==='l')$('#vb').click()}catch{}
+
+async function load(){
+  try{const c=JSON.parse(localStorage.getItem('bg'));if(c){G=c.g;X=c.x;init()}}catch{}
+  try{
+    const h={apikey:SB_KEY};
+    const [g,x]=await Promise.all(['games?select=*','expansions?select=*'].map(p=>
+      fetch(`${SB_URL}/rest/v1/${p}`,{headers:h}).then(r=>{if(!r.ok)throw r.status;return r.json()})));
+    G=g;X=x;init();
+    try{localStorage.setItem('bg',JSON.stringify({g,x}))}catch{}
+  }catch(err){$('#st').textContent=G.length?'· offline, dati salvati':'· errore di caricamento ('+err+')'}
+}
+load();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
